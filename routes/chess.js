@@ -9,43 +9,59 @@ var io = require('socket.io')(http);
 server.listen(3001);
 var socket = io.listen(server,{origins: '*:*'});
 
-var user1 = '';
-var user2 = '';
+var users = [];
 var roles = ['blue','red'];
+var connections = [];
 
 socket.on('connection', function(socket){
-    console.log(socket.id);
-    if(user1 == ''){
-        user1 = socket.id;
-        // console.log({id:user1,role:roles.pop()})
-        io.sockets.sockets[user1].emit('socketId',{id:user1,role:roles.pop(),canChess:true});
+    console.log(socket.id,'用户已经连接上');
+    connections.push(socket.id);
+
+    if(users.length >= 2 ){
+        // 如果已经连上了两位则发送暂时无法加入游戏
+        // 提示当前用户无法加入游戏
+        io.sockets.sockets[socket.id].emit('info',{info:'人数已满，暂时无法加入游戏'+users.length});
+        return ;
     }else{
-        user2 = socket.id;
-        // console.log({id:user1,role:roles.pop()})
-        io.sockets.sockets[user2].emit('socketId',{id:user2,role:roles.pop(),canChess:false});
+        users.push(socket.id);
+        if(users.length == 2){
+            // 分配红蓝方
+            for(let i = 0 ; i < users.length ; i ++){
+                io.sockets.sockets[users[i]].emit('socketId',{id:users[i],role:roles[i],canChess:i == 0?true:false});
+            }
+        }
     }
-
-
-
     // socket.emit('server_info', { hello: 'world' });
 
     // 监听棋子落子
     socket.on('chess',function (data) {
         console.log(data);
-        if(data.id == user1){
-            io.sockets.sockets[user2].emit('fresh',{chess:data.chess,next:data.role == 'blue'?'red':'blue'});
-        }else{
-            io.sockets.sockets[user1].emit('fresh',{chess:data.chess,next:data.role == 'blue'?'red':'blue'});
-        }
-
+        var send = data.id == users[0]?users[1]:users[0];
+        io.sockets.sockets[send].emit('fresh',{chess:data.chess,next:data.role == 'blue'?'red':'blue'});
     })
-    socket.on('client', function (data) {
-        console.log(data);
-    });
+
+    // 客户端断开连接
     socket.on("disconnect", function() {
-        console.log("a user go out");
+
+        var index = users.indexOf(this.id);
+        if(index < 0){
+            console.log("a user go out");
+        }else{
+            users.splice(index,1);
+            if(users.length!=0){
+                console.log(users[0]);
+                io.sockets.sockets[users[0]].emit('someone_disconnect',{info:'对手断开连接，请重新等待'});
+            }
+            console.log('a player go out');
+        }
     });
 
+    // 监听移除的棋子
+    socket.on('eat',function (data) {
+        console.log(data);
+        var send = data.id == users[0]?users[1]:users[0];
+        io.sockets.sockets[send].emit('remove',{chess:data.chess});
+    })
 
 });
 
