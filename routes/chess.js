@@ -36,10 +36,12 @@ socket.on('connection', function(socket){
     // socket.emit('server_info', { hello: 'world' });
 
     // 监听棋子落子
-    socket.on('chess',function (data) {
+    socket.on('chess',function (data,callback) {
         console.log(data);
-        var send = data.id == users[0]?users[1]:users[0];
+        var users = data.room.users;
+        var send = data.id == users[0].id?users[1].id:users[0].id;
         io.sockets.sockets[send].emit('fresh',{chess:data.chess,next:data.role == 'blue'?'red':'blue'});
+        callback();
     })
 
     // 客户端断开连接
@@ -61,8 +63,15 @@ socket.on('connection', function(socket){
     // 监听移除的棋子
     socket.on('eat',function (data) {
         console.log(data);
-        var send = data.id == users[0]?users[1]:users[0];
+        var users = data.room.users;
+        var send = data.id == users[0].id?users[1].id:users[0].id;
         io.sockets.sockets[send].emit('remove',{chess:data.chess});
+    })
+
+    // 监听游戏结果，即结束将结果发送给房间内的另外一个角色
+    socket.on('result',function (data) {
+        console.log('111111111111',data.room);
+        socket.broadcast.to(data.room.name).emit('get_result','');
     })
 
     // 监听登录
@@ -134,7 +143,7 @@ socket.on('connection', function(socket){
         // 先通过房主id找到房间信息
         var room = getRoomByOwnerId(id);
         for(let i = 0 ; i < room.users.length ; i ++){
-            io.sockets.sockets[room.users[i].id].emit('socketId',{id:room.users[i].id,role:roles[i],canChess:i == 0?true:false});
+            io.sockets.sockets[room.users[i].id].emit('socketId',{room:room,id:room.users[i].id,role:roles[i],canChess:i == 0?true:false});
         }
     })
 
